@@ -42,7 +42,7 @@ def main():
     global args
     parser = argparse.ArgumentParser(description="Convolutional NN Training Script")
     parser.add_argument("-r", "--run_name", dest="run_name", default='clusgan_w_test', help="Name of training run")
-    parser.add_argument("-n", "--n_epochs", dest="n_epochs", default=100, type=int, help="Number of epochs")
+    parser.add_argument("-n", "--n_epochs", dest="n_epochs", default=300, type=int, help="Number of epochs")
     parser.add_argument("-b", "--batch_size", dest="batch_size", default=128, type=int, help="Batch size")
     parser.add_argument("-s", "--dataset_name", dest="dataset_name", default='mnist', choices=dataset_list,
                         help="Dataset name")
