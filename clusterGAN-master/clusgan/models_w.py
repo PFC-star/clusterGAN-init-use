@@ -89,7 +89,7 @@ class FC(nn.Module):
             self,
             size=28,
             style_dim=23,
-            n_mlp=4,
+            n_mlp=3,
             channel_multiplier=2,
             blur_kernel=[1, 3, 3, 1],
             lr_mlp=0.01,
