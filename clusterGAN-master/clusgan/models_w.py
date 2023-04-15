@@ -88,7 +88,7 @@ class FC(nn.Module):
     def __init__(
             self,
             size=28,
-            style_dim=23,
+            style_dim=60,
             n_mlp=3,
             channel_multiplier=2,
             blur_kernel=[1, 3, 3, 1],
