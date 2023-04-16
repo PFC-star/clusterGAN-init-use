@@ -55,14 +55,14 @@ class Encoder_CNN(nn.Module):
     Input is vector X from image space if dimension X_dim
     Output is vector z from representation space of dimension z_dim
     """
-    def __init__(self, latent_dim, n_c, verbose=False):
+    def __init__(self, latent_dim=54, n_c=10, verbose=False):
         super(Encoder_CNN, self).__init__()
 
         self.name = 'encoder'
         self.channels = 1
         self.latent_dim = latent_dim
         self.n_c = n_c
-        self.cshape = (128, 5, 5)
+        self.cshape = (128, 2, 2)
         self.iels = int(np.prod(self.cshape))
         self.lshape = (self.iels,)
         self.verbose = verbose
@@ -745,7 +745,7 @@ class Generator_CNN(nn.Module):
         if return_latents:
             return image, latent
         else:
-            return image, None
+            return image
 
     def flops(self):
         flops = 0
@@ -1011,3 +1011,8 @@ class Discriminator_CNN(nn.Module):
 # g = Generator_CNN()
 # fake_img, _ = g(noise)
 # print(fake_img.shape)
+# input = torch.randn((1,1,16,16))
+# e = Encoder_CNN()
+# zn,zc,zc_logits= e(input)
+# print(zn.shape)
+# print(zc.shape)
