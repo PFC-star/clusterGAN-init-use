@@ -1,4 +1,0 @@
-wwew
-
-
-print("hhh")

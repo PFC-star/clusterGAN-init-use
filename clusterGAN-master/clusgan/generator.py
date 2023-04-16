@@ -504,7 +504,7 @@ class ConstantInput(nn.Module):
 class Generator(nn.Module):
     def __init__(
         self,
-        size=28,
+        size=16,
         style_dim=512,
         n_mlp=8,
         channel_multiplier=2,
@@ -558,7 +558,7 @@ class Generator(nn.Module):
         for i_layer in range(start, end + 1):
             in_channel = in_channels[i_layer - start]
             layer = StyleBasicLayer(dim=in_channel,
-                               input_resolution=(2 ** i_layer,2 ** i_layer),
+                               input_resolution=(2 ** i_layer,2 ** i_layer), # 这地方可以修改为自己的网络分辨率架构
                                depth=depths[i_layer - start],
                                num_heads=num_heads[i_layer - start],
                                window_size=window_sizes[i_layer - start],
@@ -602,8 +602,8 @@ class Generator(nn.Module):
         truncation=1,
         truncation_latent=None,
     ):
-        styles = self.style(noise)
-        inject_index = self.n_latent
+        styles = self.style(noise) # 这是FC层，特征解耦
+        inject_index = self.n_latent # 有多少个 A ，每一层有 2，一共有 8 个
 
         if truncation < 1:
             style_t = []
@@ -633,6 +633,7 @@ class Generator(nn.Module):
             count = count + 2
 
         B, L, C = x.shape
+
         assert L == self.size * self.size
         x = x.reshape(B, self.size, self.size, C).permute(0, 3, 1, 2).contiguous()
         image = skip
@@ -656,4 +657,4 @@ class Generator(nn.Module):
 noise = torch.randn((1, 512))
 g = Generator()
 fake_img, _ = g(noise)
-print(fake_img)
+print(fake_img.shape)
