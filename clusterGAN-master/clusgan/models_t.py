@@ -21,7 +21,7 @@ try:
 
     from torch.nn.utils import spectral_norm
 
-    from basic_layers import (Blur, Downsample, EqualConv2d, EqualLinear,
+    from clusgan.basic_layers import (Blur, Downsample, EqualConv2d, EqualLinear,
                               ScaledLeakyReLU)
 
 except ImportError as e:
@@ -39,7 +39,7 @@ class Reshape(nn.Module):
 
     def forward(self, x):
         return x.view(x.size(0), *self.shape)
-    
+
     def extra_repr(self):
             # (Optional)Set the extra information about this module. You can test
             # it by printing an object of this class.
@@ -65,7 +65,7 @@ class Generator_CNN(nn.Module):
         self.ishape = (128, 7, 7)
         self.iels = int(np.prod(self.ishape))
         self.verbose = verbose
-        
+
         self.model = nn.Sequential(
             # Fully connected layers
             torch.nn.Linear(self.latent_dim + self.n_c, 1024),
@@ -76,7 +76,7 @@ class Generator_CNN(nn.Module):
             nn.BatchNorm1d(self.iels),
             #torch.nn.ReLU(True),
             nn.LeakyReLU(0.2, inplace=True),
-        
+
             # Reshape to 128 x (7x7)
             Reshape(self.ishape),
 
@@ -85,7 +85,7 @@ class Generator_CNN(nn.Module):
             nn.BatchNorm2d(64),
             #torch.nn.ReLU(True),
             nn.LeakyReLU(0.2, inplace=True),
-            
+
             nn.ConvTranspose2d(64, 1, 4, stride=2, padding=1, bias=True),
             nn.Sigmoid()
         )
@@ -95,7 +95,7 @@ class Generator_CNN(nn.Module):
         if self.verbose:
             print("Setting up {}...\n".format(self.name))
             print(self.model)
-    
+
     def forward(self, zn, zc):
         z = torch.cat((zn, zc), 1)
         #z = z.unsqueeze(2).unsqueeze(3)
@@ -328,11 +328,11 @@ class Discriminator_CNN(nn.Module):
     representation z vector. For example, if X comes from the dataset, corresponding
     z is Encoder(X), and if z is sampled from representation space, X is Generator(z)
     Output is a 1-dimensional value
-    """            
+    """
     # Architecture : (64)4c2s-(128)4c2s_BL-FC1024_BL-FC1_S
     def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1], sn=False, ssd=False,wass_metric=False, verbose=False):
         super(Discriminator_CNN, self).__init__()
-        
+
         self.name = 'discriminator'
         self.channels = 1
         self.cshape = (128, 5, 5)

@@ -38,7 +38,7 @@ try:
     from scipy.optimize import linear_sum_assignment as linear_assignment, linear_sum_assignment  # 添加as语句不用修改代码中的函数名
 
     from clusgan.definitions import DATASETS_DIR, RUNS_DIR
-    from clusgan.models_t1 import Generator_CNN, Encoder_CNN, Discriminator_CNN
+    from clusgan.models_dt import Generator_CNN, Encoder_CNN, Discriminator_CNN
     from clusgan.datasets import get_dataloader, dataset_list
     from clusgan.utils import sample_z
     from sklearn.manifold import TSNE

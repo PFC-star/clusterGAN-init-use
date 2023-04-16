@@ -171,7 +171,7 @@ class FromRGB(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, size, channel_multiplier=2, blur_kernel=[1, 3, 3, 1], sn=False, ssd=False):
+    def __init__(self, size=16, channel_multiplier=2, blur_kernel=[1, 3, 3, 1], sn=False, ssd=False):
         super().__init__()
 
         channels = {
@@ -219,8 +219,8 @@ class Discriminator(nn.Module):
         else:
             self.final_linear = nn.Sequential(
 
-                # EqualLinear(channels[4] * 4 * 4, channels[4], activation='fused_lrelu'),
-                EqualLinear(4608, channels[4], activation='fused_lrelu'),
+                EqualLinear(channels[4] * 4 * 4, channels[4], activation='fused_lrelu'),
+                # EqualLinear(4608, channels[4], activation='fused_lrelu'),
                 EqualLinear(channels[4], 1),
             )
 
@@ -251,9 +251,9 @@ class Discriminator(nn.Module):
 
         return out
 
-
-# D = Discriminator(32)
-# input = torch.randn(1, 1, 28, 28)
+#
+# D = Discriminator(16)
+# input = torch.randn(1, 1, 16, 16)
 #
 # output = D(input)
 # print(output)

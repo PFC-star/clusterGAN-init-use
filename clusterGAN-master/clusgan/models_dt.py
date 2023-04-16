@@ -1,15 +1,109 @@
+from __future__ import print_function
+# 引入transformer
+try:
+    import numpy as np
+    import math
+    import torch
+    from torch.autograd import Variable
+    from torch.autograd import grad as torch_grad
+    
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import torch.utils.checkpoint as checkpoint
+    from torch.nn.utils import spectral_norm
+
+    from itertools import chain as ichain
+
+
+    from clusgan.utils import tlog, softmax, initialize_weights, calc_gradient_penalty
+    from clusgan.basic_layers import (EqualLinear, PixelNorm,
+                                      SinusoidalPositionalEmbedding, Upsample)
+    from clusgan.basic_layers import (Blur, Downsample, EqualConv2d, EqualLinear,
+                                      ScaledLeakyReLU)
+    from op import FusedLeakyReLU, upfirdn2d
+
+    from timm.models.layers import to_2tuple, trunc_normal_
+
+
+except ImportError as e:
+    print(e)
+    raise ImportError
+
+
+class Reshape(nn.Module):
+    """
+    Class for performing a reshape as a layer in a sequential model.
+    """
+    def __init__(self, shape=[]):
+        super(Reshape, self).__init__()
+        self.shape = shape
+
+    def forward(self, x):
+        return x.view(x.size(0), *self.shape)
+    
+    def extra_repr(self):
+            # (Optional)Set the extra information about this module. You can test
+            # it by printing an object of this class.
+            return 'shape={}'.format(
+                self.shape
+            )
+
+
+class Encoder_CNN(nn.Module):
+    """
+    CNN to model the encoder of a ClusterGAN
+    Input is vector X from image space if dimension X_dim
+    Output is vector z from representation space of dimension z_dim
+    """
+    def __init__(self, latent_dim, n_c, verbose=False):
+        super(Encoder_CNN, self).__init__()
+
+        self.name = 'encoder'
+        self.channels = 1
+        self.latent_dim = latent_dim
+        self.n_c = n_c
+        self.cshape = (128, 5, 5)
+        self.iels = int(np.prod(self.cshape))
+        self.lshape = (self.iels,)
+        self.verbose = verbose
+        
+        self.model = nn.Sequential(
+            # Convolutional layers
+            nn.Conv2d(self.channels, 64, 4, stride=2, bias=True),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, 4, stride=2, bias=True),
+            nn.LeakyReLU(0.2, inplace=True),
+            
+            # Flatten
+            Reshape(self.lshape),
+            
+            # Fully connected layers
+            torch.nn.Linear(self.iels, 1024),
+            nn.LeakyReLU(0.2, inplace=True),
+            torch.nn.Linear(1024, latent_dim + n_c)
+        )
+
+        initialize_weights(self)
+        
+        if self.verbose:
+            print("Setting up {}...\n".format(self.name))
+            print(self.model)
+
+    def forward(self, in_feat):
+        z_img = self.model(in_feat)
+        # Reshape for output
+        z = z_img.view(z_img.shape[0], -1)
+        # Separate continuous and one-hot components
+        zn = z[:, 0:self.latent_dim]
+        zc_logits = z[:, self.latent_dim:]
+        # Softmax on zc component
+        zc = softmax(zc_logits)
+        return zn, zc, zc_logits
+
+
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-import math
-
-import torch
-import torch.utils.checkpoint as checkpoint
-from timm.models.layers import to_2tuple, trunc_normal_
-from torch import nn
-
-from clusgan.basic_layers import (EqualLinear, PixelNorm,
-                                 SinusoidalPositionalEmbedding, Upsample)
 
 
 class ToRGB(nn.Module):
@@ -34,7 +128,7 @@ class ToRGB(nn.Module):
 
             out = out + skip
         return out
-    
+
     def flops(self):
         m = self.conv
         kernel_ops = torch.zeros(m.weight.size()[2:]).numel()  # Kw x Kh
@@ -46,7 +140,7 @@ class ToRGB(nn.Module):
             w_shape = (1, 1, 4, 4)
             kernel_ops = torch.zeros(w_shape[2:]).numel()  # Kw x Kh
             # N x Cout x H x W x  (Cin x Kw x Kh + bias)
-            flops = 1 * 3 * (2 * self.resolution + 3) * (2 *self.resolution + 3) * (3 * kernel_ops)
+            flops = 1 * 3 * (2 * self.resolution + 3) * (2 * self.resolution + 3) * (3 * kernel_ops)
         return flops
 
 
@@ -178,7 +272,7 @@ class WindowAttention(nn.Module):
 
         attn = self.attn_drop(attn)
         x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
-        
+
         return x
 
     def extra_repr(self) -> str:
@@ -260,7 +354,7 @@ class StyleSwinTransformerBlock(nn.Module):
                 dim // 2, window_size=to_2tuple(self.window_size), num_heads=num_heads // 2,
                 qk_scale=qk_scale, attn_drop=attn_drop),
         ])
-        
+
         attn_mask1 = None
         attn_mask2 = None
         if self.shift_size > 0:
@@ -282,11 +376,11 @@ class StyleSwinTransformerBlock(nn.Module):
             # nW, window_size, window_size, 1
             mask_windows = window_partition(img_mask, self.window_size)
             mask_windows = mask_windows.view(-1,
-                                            self.window_size * self.window_size)
+                                             self.window_size * self.window_size)
             attn_mask2 = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
             attn_mask2 = attn_mask2.masked_fill(
                 attn_mask2 != 0, float(-100.0)).masked_fill(attn_mask2 == 0, float(0.0))
-        
+
         self.register_buffer("attn_mask1", attn_mask1)
         self.register_buffer("attn_mask2", attn_mask2)
 
@@ -298,24 +392,25 @@ class StyleSwinTransformerBlock(nn.Module):
         H, W = self.input_resolution
         B, L, C = x.shape
         assert L == H * W, "input feature has wrong size"
-        
+
         # Double Attn
         shortcut = x
         x = self.norm1(x.transpose(-1, -2), style).transpose(-1, -2)
-        
+
         qkv = self.qkv(x).reshape(B, -1, 3, C).permute(2, 0, 1, 3).reshape(3 * B, H, W, C)
         qkv_1 = qkv[:, :, :, : C // 2].reshape(3, B, H, W, C // 2)
         if self.shift_size > 0:
-            qkv_2 = torch.roll(qkv[:, :, :, C // 2:], shifts=(-self.shift_size, -self.shift_size), dims=(1, 2)).reshape(3, B, H, W, C // 2)
+            qkv_2 = torch.roll(qkv[:, :, :, C // 2:], shifts=(-self.shift_size, -self.shift_size), dims=(1, 2)).reshape(
+                3, B, H, W, C // 2)
         else:
             qkv_2 = qkv[:, :, :, C // 2:].reshape(3, B, H, W, C // 2)
-        
+
         q1_windows, k1_windows, v1_windows = self.get_window_qkv(qkv_1)
         q2_windows, k2_windows, v2_windows = self.get_window_qkv(qkv_2)
 
         x1 = self.attn[0](q1_windows, k1_windows, v1_windows, self.attn_mask1)
         x2 = self.attn[1](q2_windows, k2_windows, v2_windows, self.attn_mask2)
-        
+
         x1 = window_reverse(x1.view(-1, self.window_size * self.window_size, C // 2), self.window_size, H, W)
         x2 = window_reverse(x2.view(-1, self.window_size * self.window_size, C // 2), self.window_size, H, W)
 
@@ -332,13 +427,16 @@ class StyleSwinTransformerBlock(nn.Module):
         x = x + self.mlp(self.norm2(x.transpose(-1, -2), style).transpose(-1, -2))
 
         return x
-    
+
     def get_window_qkv(self, qkv):
-        q, k, v = qkv[0], qkv[1], qkv[2]   # B, H, W, C
+        q, k, v = qkv[0], qkv[1], qkv[2]  # B, H, W, C
         C = q.shape[-1]
-        q_windows = window_partition(q, self.window_size).view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
-        k_windows = window_partition(k, self.window_size).view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
-        v_windows = window_partition(v, self.window_size).view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
+        q_windows = window_partition(q, self.window_size).view(-1, self.window_size * self.window_size,
+                                                               C)  # nW*B, window_size*window_size, C
+        k_windows = window_partition(k, self.window_size).view(-1, self.window_size * self.window_size,
+                                                               C)  # nW*B, window_size*window_size, C
+        v_windows = window_partition(v, self.window_size).view(-1, self.window_size * self.window_size,
+                                                               C)  # nW*B, window_size*window_size, C
         return q_windows, k_windows, v_windows
 
     def extra_repr(self) -> str:
@@ -384,7 +482,7 @@ class StyleBasicLayer(nn.Module):
     """
 
     def __init__(self, dim, input_resolution, depth, num_heads, window_size, out_dim=None,
-                 mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., upsample=None, 
+                 mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., upsample=None,
                  use_checkpoint=False, style_dim=512):
 
         super().__init__()
@@ -396,9 +494,9 @@ class StyleBasicLayer(nn.Module):
         # build blocks
         self.blocks = nn.ModuleList([
             StyleSwinTransformerBlock(dim=dim, input_resolution=input_resolution,
-                                 num_heads=num_heads, window_size=window_size,
-                                 mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                 drop=drop, attn_drop=attn_drop, style_dim=style_dim)
+                                      num_heads=num_heads, window_size=window_size,
+                                      mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                                      drop=drop, attn_drop=attn_drop, style_dim=style_dim)
             for _ in range(depth)])
 
         if upsample is not None:
@@ -449,7 +547,8 @@ class BilinearUpsample(nn.Module):
         self.dim = dim
         self.out_dim = out_dim
         self.alpha = nn.Parameter(torch.zeros(1))
-        self.sin_pos_embed = SinusoidalPositionalEmbedding(embedding_dim=out_dim // 2, padding_idx=0, init_size=out_dim // 2)
+        self.sin_pos_embed = SinusoidalPositionalEmbedding(embedding_dim=out_dim // 2, padding_idx=0,
+                                                           init_size=out_dim // 2)
 
     def forward(self, x):
         """
@@ -461,13 +560,13 @@ class BilinearUpsample(nn.Module):
         assert C == self.dim, "wrong in PatchMerging"
 
         x = x.view(B, H, W, -1)
-        x = x.permute(0, 3, 1, 2).contiguous()   # B,C,H,W
+        x = x.permute(0, 3, 1, 2).contiguous()  # B,C,H,W
         x = self.upsample(x)
-        x = x.permute(0, 2, 3, 1).contiguous().view(B, L*4, C)   # B,H,W,C
+        x = x.permute(0, 2, 3, 1).contiguous().view(B, L * 4, C)  # B,H,W,C
         x = self.norm(x)
         x = self.reduction(x)
 
-        # Add SPE    
+        # Add SPE
         x = x.reshape(B, H * 2, W * 2, self.out_dim).permute(0, 3, 1, 2)
         x += self.sin_pos_embed.make_grid2d(H * 2, W * 2, B) * self.alpha
         x = x.permute(0, 2, 3, 1).contiguous().view(B, H * 2 * W * 2, self.out_dim)
@@ -501,27 +600,30 @@ class ConstantInput(nn.Module):
         return out
 
 
-class Generator(nn.Module):
+class Generator_CNN(nn.Module):
     def __init__(
-        self,
-        size=16,
-        style_dim=64,
-        n_mlp=8,
-        channel_multiplier=2,
-        lr_mlp=0.01,
-        enable_full_resolution=8,
-        mlp_ratio=4,
-        use_checkpoint=False,
-        qkv_bias=True,
-        qk_scale=None,
-        drop_rate=0,
-        attn_drop_rate=0,
+            self,
+            latent_dim=30,
+            n_c=10,
+            x_shape=(1,16,16),
+            size=16,
+            style_dim=64,
+            n_mlp=8,
+            channel_multiplier=2,
+            lr_mlp=0.01,
+            enable_full_resolution=8,
+            mlp_ratio=4,
+            use_checkpoint=False,
+            qkv_bias=True,
+            qk_scale=None,
+            drop_rate=0,
+            attn_drop_rate=0,
     ):
         super().__init__()
         self.style_dim = style_dim
         self.size = size
         self.mlp_ratio = mlp_ratio
-        
+
         layers = [PixelNorm()]
         for _ in range(n_mlp):
             layers.append(
@@ -534,16 +636,16 @@ class Generator(nn.Module):
         start = 2
         depths = [2, 2, 2, 2, 2, 2, 2, 2, 2]
         in_channels = [
-            512, 
-            512, 
-            512, 
-            512, 
-            256 * channel_multiplier, 
-            128 * channel_multiplier, 
-            64 * channel_multiplier, 
-            32 * channel_multiplier, 
+            512,
+            512,
+            512,
+            512,
+            256 * channel_multiplier,
+            128 * channel_multiplier,
+            64 * channel_multiplier,
+            32 * channel_multiplier,
             16 * channel_multiplier
-        ]  
+        ]
 
         end = int(math.log(size, 2))
         num_heads = [max(c // 32, 4) for c in in_channels]
@@ -554,20 +656,20 @@ class Generator(nn.Module):
         self.layers = nn.ModuleList()
         self.to_rgbs = nn.ModuleList()
         num_layers = 0
-        
+
         for i_layer in range(start, end + 1):
             in_channel = in_channels[i_layer - start]
             layer = StyleBasicLayer(dim=in_channel,
-                               input_resolution=(2 ** i_layer,2 ** i_layer), # 这地方可以修改为自己的网络分辨率架构
-                               depth=depths[i_layer - start],
-                               num_heads=num_heads[i_layer - start],
-                               window_size=window_sizes[i_layer - start],
-                               out_dim=in_channels[i_layer - start + 1] if (i_layer < end) else None,
-                               mlp_ratio=self.mlp_ratio,
-                               qkv_bias=qkv_bias, qk_scale=qk_scale,
-                               drop=drop_rate, attn_drop=attn_drop_rate,
-                               upsample=BilinearUpsample if (i_layer < end) else None,
-                               use_checkpoint=use_checkpoint, style_dim=style_dim)
+                                    input_resolution=(2 ** i_layer, 2 ** i_layer),  # 这地方可以修改为自己的网络分辨率架构
+                                    depth=depths[i_layer - start],
+                                    num_heads=num_heads[i_layer - start],
+                                    window_size=window_sizes[i_layer - start],
+                                    out_dim=in_channels[i_layer - start + 1] if (i_layer < end) else None,
+                                    mlp_ratio=self.mlp_ratio,
+                                    qkv_bias=qkv_bias, qk_scale=qk_scale,
+                                    drop=drop_rate, attn_drop=attn_drop_rate,
+                                    upsample=BilinearUpsample if (i_layer < end) else None,
+                                    use_checkpoint=use_checkpoint, style_dim=style_dim)
             self.layers.append(layer)
 
             out_dim = in_channels[i_layer - start + 1] if (i_layer < end) else in_channels[i_layer - start]
@@ -595,17 +697,17 @@ class Generator(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(
-        self,
-        noise,
+            self,
+            noise,
             zc,
-        return_latents=False,
-        inject_index=None,
-        truncation=1,
-        truncation_latent=None,
+            return_latents=False,
+            inject_index=None,
+            truncation=1,
+            truncation_latent=None,
     ):
-        noise =  torch.cat((noise, zc), 1)
-        styles = self.style(noise) # 这是FC层，特征解耦
-        inject_index = self.n_latent # 有多少个 A ，每一层有 2，一共有 8 个
+        noise = torch.cat((noise, zc), 1)
+        styles = self.style(noise)  # 这是FC层，特征解耦
+        inject_index = self.n_latent  # 有多少个 A ，每一层有 2，一共有 8 个
 
         if truncation < 1:
             style_t = []
@@ -615,7 +717,7 @@ class Generator(nn.Module):
                 )
 
             styles = torch.cat(style_t, dim=0)
-        
+
         if styles.ndim < 3:
             latent = styles.unsqueeze(1).repeat(1, inject_index, 1)
         else:
@@ -628,7 +730,7 @@ class Generator(nn.Module):
         count = 0
         skip = None
         for layer, to_rgb in zip(self.layers, self.to_rgbs):
-            x = layer(x, latent[:,count,:], latent[:,count+1,:])
+            x = layer(x, latent[:, count, :], latent[:, count + 1, :])
             b, n, c = x.shape
             h, w = int(math.sqrt(n)), int(math.sqrt(n))
             skip = to_rgb(x.transpose(-1, -2).reshape(b, c, h, w), skip)
@@ -655,8 +757,257 @@ class Generator(nn.Module):
         flops += 1 * 10 * self.style_dim * self.style_dim
         return flops
 
-# # input = torch.randn(1,512,256,256)
-# noise = torch.randn((1, 63))
-# g = Generator()
-# fake_img, _ = g(noise,)
+
+class ConvLayer(nn.Sequential):
+    def __init__(
+            self,
+            in_channel,
+            out_channel,
+            kernel_size,
+            downsample=False,
+            blur_kernel=[1, 3, 3, 1],
+            bias=True,
+            activate=True,
+            sn=False
+    ):
+        layers = []
+
+        if downsample:
+            factor = 2
+            p = (len(blur_kernel) - factor) + (kernel_size - 1)
+            pad0 = (p + 1) // 2
+            pad1 = p // 2
+
+            layers.append(Blur(blur_kernel, pad=(pad0, pad1)))
+
+            stride = 2
+            self.padding = 0
+
+        else:
+            stride = 1
+            self.padding = kernel_size // 2
+
+        if sn:
+            # Not use equal conv2d when apply SN
+            layers.append(
+                spectral_norm(nn.Conv2d(
+                    in_channel,
+                    out_channel,
+                    kernel_size,
+                    padding=self.padding,
+                    stride=stride,
+                    bias=bias and not activate,
+                ))
+            )
+        else:
+            layers.append(
+                EqualConv2d(
+                    in_channel,
+                    out_channel,
+                    kernel_size,
+                    padding=self.padding,
+                    stride=stride,
+                    bias=bias and not activate,
+                )
+            )
+
+        if activate:
+            if bias:
+                layers.append(FusedLeakyReLU(out_channel))
+            else:
+                layers.append(ScaledLeakyReLU(0.2))
+
+        super().__init__(*layers)
+
+
+class ConvBlock(nn.Module):
+    def __init__(self, in_channel, out_channel, blur_kernel=[1, 3, 3, 1], sn=False):
+        super().__init__()
+
+        self.conv1 = ConvLayer(in_channel, in_channel, 3, sn=sn)
+        self.conv2 = ConvLayer(in_channel, out_channel, 3, downsample=True, sn=sn)
+
+    def forward(self, input):
+        out = self.conv1(input)
+        out = self.conv2(out)
+
+        return out
+
+
+def get_haar_wavelet(in_channels):
+    haar_wav_l = 1 / (2 ** 0.5) * torch.ones(1, 2)
+    haar_wav_h = 1 / (2 ** 0.5) * torch.ones(1, 2)
+    haar_wav_h[0, 0] = -1 * haar_wav_h[0, 0]
+
+    haar_wav_ll = haar_wav_l.T * haar_wav_l
+    haar_wav_lh = haar_wav_h.T * haar_wav_l
+    haar_wav_hl = haar_wav_l.T * haar_wav_h
+    haar_wav_hh = haar_wav_h.T * haar_wav_h
+
+    return haar_wav_ll, haar_wav_lh, haar_wav_hl, haar_wav_hh
+
+
+class HaarTransform(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+
+        ll, lh, hl, hh = get_haar_wavelet(in_channels)
+
+        self.register_buffer('ll', ll)
+        self.register_buffer('lh', lh)
+        self.register_buffer('hl', hl)
+        self.register_buffer('hh', hh)
+
+    def forward(self, input):
+        ll = upfirdn2d(input, self.ll, down=2)
+        lh = upfirdn2d(input, self.lh, down=2)
+        hl = upfirdn2d(input, self.hl, down=2)
+        hh = upfirdn2d(input, self.hh, down=2)
+
+        return torch.cat((ll, lh, hl, hh), 1)
+
+
+class InverseHaarTransform(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+
+        ll, lh, hl, hh = get_haar_wavelet(in_channels)
+
+        self.register_buffer('ll', ll)
+        self.register_buffer('lh', -lh)
+        self.register_buffer('hl', -hl)
+        self.register_buffer('hh', hh)
+
+    def forward(self, input):
+        ll, lh, hl, hh = input.chunk(4, 1)
+        ll = upfirdn2d(ll, self.ll, up=2, pad=(1, 0, 1, 0))
+        lh = upfirdn2d(lh, self.lh, up=2, pad=(1, 0, 1, 0))
+        hl = upfirdn2d(hl, self.hl, up=2, pad=(1, 0, 1, 0))
+        hh = upfirdn2d(hh, self.hh, up=2, pad=(1, 0, 1, 0))
+
+        return ll + lh + hl + hh
+
+
+class FromRGB(nn.Module):
+    def __init__(self, out_channel, downsample=True, blur_kernel=[1, 3, 3, 1], sn=False):
+        super().__init__()
+
+        self.downsample = downsample
+
+        if downsample:
+            self.iwt = InverseHaarTransform(3)
+            self.downsample = Downsample(blur_kernel)
+            self.dwt = HaarTransform(3)
+        self.conv = ConvLayer(3 * 4, out_channel, 1, sn=sn)
+        self.conv = ConvLayer(4, out_channel, 1, sn=sn)
+
+    def forward(self, input, skip=None):
+        if self.downsample:
+            input = self.iwt(input)
+            input = self.downsample(input)
+            input = self.dwt(input)
+
+        out = self.conv(input)
+
+        if skip is not None:
+            out = out + skip
+
+        return input, out
+
+
+class Discriminator_CNN(nn.Module):
+    def __init__(self, wass_metric=True,size=16, channel_multiplier=2, blur_kernel=[1, 3, 3, 1], sn=False, ssd=False):
+        super().__init__()
+
+        channels = {
+            4: 512,
+            8: 512,
+            16: 512,
+            28: 512,
+            32: 512,
+            64: 256 * channel_multiplier,
+            128: 128 * channel_multiplier,
+            256: 64 * channel_multiplier,
+            512: 32 * channel_multiplier,
+            1024: 16 * channel_multiplier,
+        }
+
+        self.dwt = HaarTransform(3)
+
+        self.from_rgbs = nn.ModuleList()
+        self.convs = nn.ModuleList()
+
+        log_size = int(math.log(size, 2)) - 1
+
+        in_channel = channels[size]
+
+        for i in range(log_size, 2, -1):
+            out_channel = channels[2 ** (i - 1)]
+
+            self.from_rgbs.append(FromRGB(in_channel, downsample=i != log_size, sn=sn))
+            self.convs.append(ConvBlock(in_channel, out_channel, blur_kernel, sn=sn))
+
+            in_channel = out_channel
+
+        self.from_rgbs.append(FromRGB(channels[4], sn=sn))
+
+        self.stddev_group = 4
+        self.stddev_feat = 1
+
+        self.final_conv = ConvLayer(in_channel + 1, channels[4], 3, sn=sn)
+        if sn:
+            self.final_linear = nn.Sequential(
+                spectral_norm(nn.Linear(channels[4] * 4 * 4, channels[4])),
+                FusedLeakyReLU(channels[4]),
+                spectral_norm(nn.Linear(channels[4], 1)),
+            )
+        else:
+            self.final_linear = nn.Sequential(
+
+                EqualLinear(channels[4] * 4 * 4, channels[4], activation='fused_lrelu'),
+                # EqualLinear(4608, channels[4], activation='fused_lrelu'),
+                EqualLinear(channels[4], 1),
+            )
+
+    def forward(self, input):
+        input = self.dwt(input)
+        out = None
+
+        for from_rgb, conv in zip(self.from_rgbs, self.convs):
+            input, out = from_rgb(input, out)
+            out = conv(out)
+
+        _, out = self.from_rgbs[-1](input, out)
+
+        batch, channel, height, width = out.shape
+        group = min(batch, self.stddev_group)
+        stddev = out.view(
+            group, -1, self.stddev_feat, channel // self.stddev_feat, height, width
+        )
+        stddev = torch.sqrt(stddev.var(0, unbiased=False) + 1e-8)
+        stddev = stddev.mean([2, 3, 4], keepdims=True).squeeze(2)
+        stddev = stddev.repeat(group, 1, height, width)
+        out = torch.cat([out, stddev], 1)
+
+        out = self.final_conv(out)
+
+        out = out.view(batch, -1)
+        out = self.final_linear(out)
+
+        return out
+
+#
+# D = Discriminator(16)
+# input = torch.randn(1, 1, 16, 16)
+#
+# output = D(input)
+# print(output)
+
+
+
+
+
+# noise = torch.randn((1, 64))
+# g = Generator_CNN()
+# fake_img, _ = g(noise)
 # print(fake_img.shape)
