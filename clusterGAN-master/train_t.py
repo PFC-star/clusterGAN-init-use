@@ -31,7 +31,7 @@ try:
     from clusgan.utils import save_model, calc_gradient_penalty, sample_z, cross_entropy
     from clusgan.datasets import get_dataloader, dataset_list
     from clusgan.plots import plot_train_loss
-    from evaluate_in_code import evaluate
+    from evaluate_in_code_t import evaluate
     from clusgan.utils import load_model
 except ImportError as e:
     print(e)
@@ -57,7 +57,7 @@ def main():
 
     args = parser.parse_args()
     epoch_init = 0
-    args.resume_train = True
+    args.resume_train = False
     run_name = args.run_name
     dataset_name = args.dataset_name
     device_id = args.gpu
