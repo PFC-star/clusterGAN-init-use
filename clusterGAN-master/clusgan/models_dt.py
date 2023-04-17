@@ -915,7 +915,7 @@ class FromRGB(nn.Module):
         return input, out
 
 
-class Discriminator_CNN(nn.Module):
+class Discriminator_CNN1(nn.Module):
     def __init__(self, wass_metric=True,size=16, channel_multiplier=2, blur_kernel=[1, 3, 3, 1], sn=False, ssd=False):
         super().__init__()
 
@@ -996,6 +996,58 @@ class Discriminator_CNN(nn.Module):
 
         return out
 
+
+class Discriminator_CNN(nn.Module):
+    """
+    CNN to model the discriminator of a ClusterGAN
+    Input is tuple (X,z) of an image vector and its corresponding
+    representation z vector. For example, if X comes from the dataset, corresponding
+    z is Encoder(X), and if z is sampled from representation space, X is Generator(z)
+    Output is a 1-dimensional value
+    """
+
+    # Architecture : (64)4c2s-(128)4c2s_BL-FC1024_BL-FC1_S
+    def __init__(self, wass_metric=False, verbose=False):
+        super(Discriminator_CNN, self).__init__()
+
+        self.name = 'discriminator'
+        self.channels = 1
+        self.cshape = (128, 2, 2)
+        self.iels = int(np.prod(self.cshape))
+        self.lshape = (self.iels,)
+        self.wass = wass_metric
+        self.verbose = verbose
+
+        self.model = nn.Sequential(
+            # Convolutional layers
+            nn.Conv2d(self.channels, 64, 4, stride=2, bias=True),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, 4, stride=2, bias=True),
+            nn.LeakyReLU(0.2, inplace=False),
+
+            # Flatten
+            Reshape(self.lshape),
+
+            # Fully connected layers
+            torch.nn.Linear(self.iels, 1024),
+            nn.LeakyReLU(0.2, inplace=True),
+            torch.nn.Linear(1024, 1),
+        )
+
+        # If NOT using Wasserstein metric, final Sigmoid
+        if (not self.wass):
+            self.model = nn.Sequential(self.model, torch.nn.Sigmoid())
+
+        initialize_weights(self)
+
+        if self.verbose:
+            print("Setting up {}...\n".format(self.name))
+            print(self.model)
+
+    def forward(self, img):
+        # Get output
+        validity = self.model(img)
+        return validity
 #
 # D = Discriminator(16)
 # input = torch.randn(1, 1, 16, 16)

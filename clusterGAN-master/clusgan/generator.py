@@ -597,13 +597,13 @@ class Generator(nn.Module):
     def forward(
         self,
         noise,
-            zc,
+
         return_latents=False,
         inject_index=None,
         truncation=1,
         truncation_latent=None,
     ):
-        noise =  torch.cat((noise, zc), 1)
+        # noise =  torch.cat((noise, zc), 1)
         styles = self.style(noise) # 这是FC层，特征解耦
         inject_index = self.n_latent # 有多少个 A ，每一层有 2，一共有 8 个
 
@@ -655,8 +655,8 @@ class Generator(nn.Module):
         flops += 1 * 10 * self.style_dim * self.style_dim
         return flops
 
-# # input = torch.randn(1,512,256,256)
-# noise = torch.randn((1, 63))
-# g = Generator()
-# fake_img, _ = g(noise,)
-# print(fake_img.shape)
+
+noise = torch.randn((1, 64))
+g = Generator()
+fake_img, _ = g(noise )
+print(fake_img.shape)

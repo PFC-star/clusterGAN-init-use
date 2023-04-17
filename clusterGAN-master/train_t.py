@@ -80,7 +80,7 @@ def main():
     latent_dim = 54
     n_c = 10
     betan = 10
-    betac = 25
+    betac = 50
 
 
     # Wasserstein metric flag
