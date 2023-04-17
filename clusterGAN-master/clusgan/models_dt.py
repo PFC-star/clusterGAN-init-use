@@ -758,6 +758,63 @@ class Generator_CNN(nn.Module):
         return flops
 
 
+class Generator_CNN1(nn.Module):
+    """
+    CNN to model the generator of a ClusterGAN
+    Input is a vector from representation space of dimension z_dim
+    output is a vector from image space of dimension X_dim
+    """
+
+    # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
+    def __init__(self, latent_dim, n_c, x_shape, verbose=False):
+        super(Generator_CNN, self).__init__()
+
+        self.name = 'generator'
+        self.latent_dim = latent_dim
+        self.n_c = n_c
+        self.x_shape = x_shape
+        self.ishape = (128, 4, 4)
+        self.iels = int(np.prod(self.ishape))
+        self.verbose = verbose
+
+        self.model = nn.Sequential(
+            # Fully connected layers
+            torch.nn.Linear(self.latent_dim + self.n_c, 1024),
+            nn.BatchNorm1d(1024),
+            # torch.nn.ReLU(True),
+            nn.LeakyReLU(0.2, inplace=True),
+            torch.nn.Linear(1024, self.iels),
+            nn.BatchNorm1d(self.iels),
+            # torch.nn.ReLU(True),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # Reshape to 128 x (7x7)
+            Reshape(self.ishape),
+
+            # Upconvolution layers
+            nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1, bias=True),
+            nn.BatchNorm2d(64),
+            # torch.nn.ReLU(True),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.ConvTranspose2d(64, 1, 4, stride=2, padding=1, bias=True),
+            nn.Sigmoid()
+        )
+
+        initialize_weights(self)
+
+        if self.verbose:
+            print("Setting up {}...\n".format(self.name))
+            print(self.model)
+
+    def forward(self, zn, zc):
+        z = torch.cat((zn, zc), 1)
+        # z = z.unsqueeze(2).unsqueeze(3)
+        x_gen = self.model(z)
+        # Reshape for output
+        x_gen = x_gen.view(x_gen.size(0), *self.x_shape)
+        return x_gen
+
 class ConvLayer(nn.Sequential):
     def __init__(
             self,
