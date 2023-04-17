@@ -207,7 +207,8 @@ def main():
             # Discriminator output from real and generated samples
             D_gen = discriminator(gen_imgs)
             D_real = discriminator(real_imgs)
-
+            writer.add_scalar("Dgen1",D_gen)
+            writer.add_scalar("D_real1", D_real)
             # Step for Generator & Encoder, n_skip_iter times less than for discriminator
             if (i % n_skip_iter == 0):
                 # Encode the generated images
@@ -244,7 +245,7 @@ def main():
 
                 # added by lgm
                 D_gen = discriminator(gen_imgs.detach())
-
+                writer.add_scalar("Dgen2", D_gen)
                 # Wasserstein GAN loss w/gradient penalty
                 d_loss = -torch.mean(D_real) + torch.mean(D_gen) + grad_penalty
 
