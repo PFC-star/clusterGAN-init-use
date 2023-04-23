@@ -71,13 +71,13 @@ def main():
     b1 = 0.5
     b2 = 0.9  # 99
     decay = 2.5 * 1e-5
-    n_skip_iter = 1  # 5
+    n_skip_iter = 5  # 5
 
     img_size = 28
     channels = 1
 
     # Latent space info
-    latent_dim = 150
+    latent_dim = 100
     n_c = 10
     betan = 10
     betac = 25
