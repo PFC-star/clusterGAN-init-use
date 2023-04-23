@@ -119,6 +119,21 @@ def weights_init(m):
         m.bias.data.fill_(0)
 
 
+class NormalNLLLoss:
+    """
+    Calculate the negative log likelihood
+    of normal distribution.
+    This needs to be minimised.
+
+    Treating Q(cj | x) as a factored Gaussian.
+    """
+
+    def __call__(self, x, mu, var):
+        logli = -0.5 * (var.mul(2 * np.pi) + 1e-6).log() - (x - mu).pow(2).div(var.mul(2.0) + 1e-6)
+        nll = -(logli.sum(1).mean())
+
+        return nll
+
 # Sample a random latent space vector
 def sample_z(shape=64, latent_dim=10, n_c=10, fix_class=-1, req_grad=False):
     assert (fix_class == -1 or (fix_class >= 0 and fix_class < n_c)), "Requested class %i outside bounds." % fix_class
@@ -126,7 +141,7 @@ def sample_z(shape=64, latent_dim=10, n_c=10, fix_class=-1, req_grad=False):
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
     # Sample noise as generator input, zn
-    zn = Variable(Tensor(0.75 * np.random.normal(0, 1, (shape, latent_dim)), device=device), requires_grad=req_grad)
+    zn = Variable(Tensor(0.4 * np.random.normal(0, 1, (shape, latent_dim)), device=device), requires_grad=req_grad)
     # 标准差有问题，不是原论文的标准差
     ######### zc, zc_idx variables with grads, and zc to one-hot vector
     # Pure one-hot vector generation

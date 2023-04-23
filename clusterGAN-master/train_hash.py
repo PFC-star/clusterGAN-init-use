@@ -28,10 +28,10 @@ try:
     import math
     from clusgan.definitions import DATASETS_DIR, RUNS_DIR
     from clusgan.models import Generator_CNN, Encoder_CNN, Discriminator_CNN
-    from clusgan.utils import save_model, calc_gradient_penalty, sample_z, cross_entropy
+    from clusgan.utils import save_model, calc_gradient_penalty, sample_z, cross_entropy,NormalNLLLoss
     from clusgan.datasets import get_dataloader, dataset_list
     from clusgan.plots import plot_train_loss
-    from evaluate_in_code import evaluate
+    from evaluate_in_code_t import evaluate
     from clusgan.utils import load_model
 except ImportError as e:
     print(e)
@@ -41,7 +41,7 @@ except ImportError as e:
 def main():
     global args
     parser = argparse.ArgumentParser(description="Convolutional NN Training Script")
-    parser.add_argument("-r", "--run_name", dest="run_name", default='clusgan_test_alp=0.4', help="Name of training run")
+    parser.add_argument("-r", "--run_name", dest="run_name", default='clusgan_t_test', help="Name of training run")
     parser.add_argument("-n", "--n_epochs", dest="n_epochs", default=300, type=int, help="Number of epochs")
     parser.add_argument("-b", "--batch_size", dest="batch_size", default=128, type=int, help="Batch size")
     parser.add_argument("-s", "--dataset_name", dest="dataset_name", default='mnist', choices=dataset_list,
@@ -57,7 +57,7 @@ def main():
 
     args = parser.parse_args()
     epoch_init = 0
-    args.resume_train = True
+    args.resume_train = False
     run_name = args.run_name
     dataset_name = args.dataset_name
     device_id = args.gpu
@@ -73,14 +73,14 @@ def main():
     decay = 2.5 * 1e-5
     n_skip_iter = 1  # 5
 
-    img_size = 28
+    img_size = 16
     channels = 1
 
     # Latent space info
-    latent_dim = 150
+    latent_dim = 54
     n_c = 10
     betan = 10
-    betac = 25
+    betac = 50
 
 
     # Wasserstein metric flag
@@ -117,6 +117,8 @@ def main():
     bce_loss = torch.nn.BCELoss()
     xe_loss = torch.nn.CrossEntropyLoss()
     mse_loss = torch.nn.MSELoss()
+
+
 
     # Initialize generator and discriminator
     generator = Generator_CNN(latent_dim, n_c, x_shape)
@@ -207,7 +209,8 @@ def main():
             # Discriminator output from real and generated samples
             D_gen = discriminator(gen_imgs)
             D_real = discriminator(real_imgs)
-
+            writer.add_scalar("Dgen1",D_gen[0].item(),epoch)
+            writer.add_scalar("D_real1", D_real[0].item(),epoch)
             # Step for Generator & Encoder, n_skip_iter times less than for discriminator
             if (i % n_skip_iter == 0):
                 # Encode the generated images
@@ -217,6 +220,11 @@ def main():
                 zn_loss = mse_loss(enc_gen_zn, zn)
                 zc_loss = xe_loss(enc_gen_zc_logits, zc_idx)
                 # zc_loss = cross_entropy(enc_gen_zc_logits, zc)
+
+
+                # info_loss.backward()
+
+
 
                 # Check requested metric
                 if wass_metric:
@@ -244,7 +252,7 @@ def main():
 
                 # added by lgm
                 D_gen = discriminator(gen_imgs.detach())
-
+                writer.add_scalar("Dgen2", D_gen[0].item(),epoch)
                 # Wasserstein GAN loss w/gradient penalty
                 d_loss = -torch.mean(D_real) + torch.mean(D_gen) + grad_penalty
 

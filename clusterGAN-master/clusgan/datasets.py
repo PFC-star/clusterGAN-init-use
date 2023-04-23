@@ -53,7 +53,7 @@ def get_dataloader(dataset_name='mnist', data_dir='', batch_size=64, train_set=T
         dset(data_dir, train=train_set, download=True,
                        transform=transforms.Compose([
                            transforms.ToTensor(),
-                           transforms.Resize((16, 16)),  # 图像尺寸缩放
+                           # transforms.Resize((16, 16)),  # 图像尺寸缩放
                            #transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                        ])),
         num_workers=num_workers,
