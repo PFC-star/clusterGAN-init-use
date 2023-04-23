@@ -161,7 +161,7 @@ def sample_z(shape=64, latent_dim=10, n_c=10, fix_class=-1, req_grad=False):
 
     zc = Variable(zc_FT, requires_grad=req_grad)
     # Sample noise as generator input, zn
-    zn = Variable(Tensor(0.75 * np.random.normal(0, 25, (shape, latent_dim)), device=device), requires_grad=req_grad)
+    zn = Variable(Tensor(0.75 * np.random.normal(0, 5, (shape, latent_dim)), device=device), requires_grad=req_grad)
     ## Gaussian-noisey vector generation
     # zc = Variable(Tensor(np.random.normal(0, 1, (shape, n_c))), requires_grad=req_grad)
     # zc = softmax(zc)
