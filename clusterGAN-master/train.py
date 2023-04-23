@@ -77,7 +77,7 @@ def main():
     channels = 1
 
     # Latent space info
-    latent_dim = 100
+    latent_dim = 30
     n_c = 10
     betan = 10
     betac = 25
