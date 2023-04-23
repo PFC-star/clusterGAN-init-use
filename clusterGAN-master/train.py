@@ -27,7 +27,7 @@ try:
     from itertools import chain as ichain
     import math
     from clusgan.definitions import DATASETS_DIR, RUNS_DIR
-    from clusgan.models_w import Generator_CNN, Encoder_CNN, Discriminator_CNN
+    from clusgan.models import Generator_CNN, Encoder_CNN, Discriminator_CNN
     from clusgan.utils import save_model, calc_gradient_penalty, sample_z, cross_entropy
     from clusgan.datasets import get_dataloader, dataset_list
     from clusgan.plots import plot_train_loss
@@ -41,7 +41,7 @@ except ImportError as e:
 def main():
     global args
     parser = argparse.ArgumentParser(description="Convolutional NN Training Script")
-    parser.add_argument("-r", "--run_name", dest="run_name", default='clusgan_w_test', help="Name of training run")
+    parser.add_argument("-r", "--run_name", dest="run_name", default='clusgan_test', help="Name of training run")
     parser.add_argument("-n", "--n_epochs", dest="n_epochs", default=300, type=int, help="Number of epochs")
     parser.add_argument("-b", "--batch_size", dest="batch_size", default=128, type=int, help="Batch size")
     parser.add_argument("-s", "--dataset_name", dest="dataset_name", default='mnist', choices=dataset_list,
