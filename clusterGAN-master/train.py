@@ -27,7 +27,7 @@ try:
     from itertools import chain as ichain
     import math
     from clusgan.definitions import DATASETS_DIR, RUNS_DIR
-    from clusgan.models import Generator_CNN, Encoder_CNN, Discriminator_CNN
+    from clusgan.models_w import Generator_CNN, Encoder_CNN, Discriminator_CNN
     from clusgan.utils import save_model, calc_gradient_penalty, sample_z, cross_entropy
     from clusgan.datasets import get_dataloader, dataset_list
     from clusgan.plots import plot_train_loss
