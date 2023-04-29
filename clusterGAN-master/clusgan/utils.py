@@ -141,7 +141,7 @@ def sample_z(shape=64, latent_dim=10, n_c=10, fix_class=-1, req_grad=False):
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
     # Sample noise as generator input, zn
-    zn = Variable(Tensor(0.75 * np.random.normal(0, 1, (shape, latent_dim)), device=device), requires_grad=req_grad)
+    zn = Variable(Tensor(0.75 * np.random.normal(0, 0.5, (shape, latent_dim)), device=device), requires_grad=req_grad)
     # 标准差有问题，不是原论文的标准差
     ######### zc, zc_idx variables with grads, and zc to one-hot vector
     # Pure one-hot vector generation
