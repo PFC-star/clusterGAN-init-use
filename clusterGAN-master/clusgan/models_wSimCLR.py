@@ -1,6 +1,8 @@
 from __future__ import print_function
 # 引入StyleGAN2解耦思想与对比学习思想 进入Encoder
 # 对比学习中的模型作用是编码图片，得到对比的特征，Encoder的作用也是这个，说不定可以加强的
+import torchvision
+
 try:
     import numpy as np
     
@@ -171,58 +173,6 @@ class Generator_CNN(nn.Module):
         return x_gen
 
 
-class Encoder_CNN(nn.Module):
-    """
-    CNN to model the encoder of a ClusterGAN
-    Input is vector X from image space if dimension X_dim
-    Output is vector z from representation space of dimension z_dim
-    """
-    def __init__(self, latent_dim, n_c, verbose=False):
-        super(Encoder_CNN, self).__init__()
-
-        self.name = 'encoder'
-        self.channels = 1
-        self.latent_dim = latent_dim
-        self.n_c = n_c
-        self.cshape = (128, 5, 5)
-        self.iels = int(np.prod(self.cshape))
-        self.lshape = (self.iels,)
-        self.verbose = verbose
-        self.fc = FC(28,latent_dim)
-        self.model = nn.Sequential(
-            # Convolutional layers
-            nn.Conv2d(self.channels, 64, 4, stride=2, bias=True),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 128, 4, stride=2, bias=True),
-            nn.LeakyReLU(0.2, inplace=True),
-            
-            # Flatten
-            Reshape(self.lshape),
-            
-            # Fully connected layers
-            torch.nn.Linear(self.iels, 1024),
-            nn.LeakyReLU(0.2, inplace=True),
-            torch.nn.Linear(1024, latent_dim + n_c)
-        )
-
-        initialize_weights(self)
-        
-        if self.verbose:
-            print("Setting up {}...\n".format(self.name))
-            print(self.model)
-
-    def forward(self, in_feat):
-        z_img = self.model(in_feat)
-        # Reshape for output
-        z = z_img.view(z_img.shape[0], -1)
-        # Separate continuous and one-hot components
-        zn = z[:, 0:self.latent_dim]
-        zn = self.fc(zn)
-        zc_logits = z[:, self.latent_dim:]
-        # Softmax on zc component
-        zc = softmax(zc_logits)
-        return zn, zc, zc_logits
-
 
 class Discriminator_CNN(nn.Module):
     """
@@ -274,19 +224,108 @@ class Discriminator_CNN(nn.Module):
         # Get output
         validity = self.model(img)
         return validity
-# latent_dim =30
+
+
+class Encoder_CNN1(nn.Module):
+    """
+    CNN to model the encoder of a ClusterGAN
+    Input is vector X from image space if dimension X_dim
+    Output is vector z from representation space of dimension z_dim
+    """
+
+    def __init__(self, latent_dim, n_c, verbose=False):
+        super(Encoder_CNN, self).__init__()
+
+        self.name = 'encoder'
+        self.channels = 1
+        self.latent_dim = latent_dim
+        self.n_c = n_c
+        self.cshape = (128, 5, 5)
+        self.iels = int(np.prod(self.cshape))
+        self.lshape = (self.iels,)
+        self.verbose = verbose
+        self.fc = FC(28, latent_dim)
+        self.model = nn.Sequential(
+            # Convolutional layers
+            nn.Conv2d(self.channels, 64, 4, stride=2, bias=True),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, 4, stride=2, bias=True),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            # Flatten
+            Reshape(self.lshape),
+
+            # Fully connected layers
+            torch.nn.Linear(self.iels, 1024),
+            nn.LeakyReLU(0.2, inplace=True),
+            torch.nn.Linear(1024, latent_dim + n_c)
+        )
+
+        initialize_weights(self)
+
+        if self.verbose:
+            print("Setting up {}...\n".format(self.name))
+            print(self.model)
+
+    def forward(self, in_feat):
+        z_img = self.model(in_feat)
+        # Reshape for output
+        z = z_img.view(z_img.shape[0], -1)
+        # Separate continuous and one-hot components
+        zn = z[:, 0:self.latent_dim]
+
+        zc_logits = z[:, self.latent_dim:]
+        # Softmax on zc component
+        zc = softmax(zc_logits)
+        return zn, zc, zc_logits
+class Encoder_CNN(nn.Module):
+    def __init__(self, latent_dim, n_c, verbose=False):
+        super(Encoder_CNN, self).__init__()
+        self.latent_dim = latent_dim
+        self.n_c = n_c
+        self.name = 'encoder'
+        self.channels = 1
+
+
+        self.cshape = (128, 5, 5)
+        self.iels = int(np.prod(self.cshape))
+        self.lshape = (self.iels,)
+        self.verbose = verbose
+        # self.backbone = torchvision.models.resnet18(pretrained=False, num_classes=latent_dim+n_c)
+        self.backbone1c = torchvision.models.resnet18(pretrained=False, num_classes=latent_dim+n_c)
+        self.backbone3c = torchvision.models.resnet18(pretrained=False, num_classes=latent_dim+n_c)
+        self.backbone1c.conv1 = nn.Sequential(
+            nn.Conv2d(1, 3, kernel_size=(1, 1), stride=1),
+            nn.BatchNorm2d(3, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        )
+        # self.backbone1c.fc = nn.Sequential(
+        #     nn.Linear(dim_mlp, dim_mlp),
+        #     nn.ReLU(inplace=True),
+        #     self.backbone.fc)
+    def forward(self,in_feat):
+        b, c, h, w = in_feat.size()
+        if (c == 1):
+            model = self.backbone1c
+        elif (c == 3):
+            model =  self.backbone3c
+        z_img = model(in_feat)
+        # Reshape for output
+        z = z_img.view(z_img.shape[0], -1)
+        # Separate continuous and one-hot components
+        zn = z[:, 0:self.latent_dim]
+
+        zc_logits = z[:, self.latent_dim:]
+        # Softmax on zc component
+        zc = softmax(zc_logits)
+        return zn, zc, zc_logits
+# latent_dim =128
 # n_c = 10
-# zn, zc, zc_idx = sample_z(shape=28,
-#                           latent_dim =latent_dim,
-#                                       n_c=n_c)
-# x_shape = (1, 28, 28)
-# sc = Generator_CNN(latent_dim,n_c,x_shape=x_shape)
-#
-# output = sc(zn,zc)
-# print(output)
-
-
 # encoder = Encoder_CNN(latent_dim,n_c)
-# input = torch.randn(1,1,28,28)
-# output = encoder(input)
-# print(output)
+# input = torch.randn(4,1,28,28)
+# zn, zc, zc_logits= encoder(input)
+# print(zn.size())
+# print(zc.size())
+# print(zc_logits.size())
+
