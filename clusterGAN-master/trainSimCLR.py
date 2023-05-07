@@ -42,8 +42,8 @@ def main():
     global args
     parser = argparse.ArgumentParser(description="Convolutional NN Training Script")
     parser.add_argument("-r", "--run_name", dest="run_name", default='clusgan_test', help="Name of training run")
-    parser.add_argument("-n", "--n_epochs", dest="n_epochs", default=300, type=int, help="Number of epochs")
-    parser.add_argument("-b", "--batch_size", dest="batch_size", default=32, type=int, help="Batch size")
+    parser.add_argument("-n", "--n_epochs", dest="n_epochs", default=1000, type=int, help="Number of epochs")
+    parser.add_argument("-b", "--batch_size", dest="batch_size", default=256, type=int, help="Batch size")
     parser.add_argument("-s", "--dataset_name", dest="dataset_name", default='mnist', choices=dataset_list,
                         help="Dataset name")
     parser.add_argument("-w", "--wass_metric", dest="wass_metric", default=True, action='store_true',
@@ -130,27 +130,27 @@ def main():
         xe_loss.cuda()
         mse_loss.cuda()
     # ---------------------------初始化Encoder-------------------------------------------
-    checkpoint = torch.load('checkpoint_0020.pth.tar', map_location=device)
-    state_dict = checkpoint['state_dict']
-    #  删除多余的fc层的权重信息，这样后面好重新训练
-    if(channels==1):
-        for k in list(state_dict.keys()):
-
-           if k.startswith('backbone1c.fc'):
-                del state_dict[k]
-    if (channels == 3):
-        for k in list(state_dict.keys()):
-
-            if k.startswith('backbone3c.fc'):
-                del state_dict[k]
-    log = encoder.load_state_dict(state_dict, strict=False)
-    # assert log.missing_keys == ['fc.weight', 'fc.bias']
-    # freeze all layers but the last fc
-    for name, param in encoder.named_parameters():
-        if name not in ['backbone1c.fc.weight', 'backbone1c.fc.bias']:
-            param.requires_grad = False
-    parameters = list(filter(lambda p: p.requires_grad, encoder.parameters()))
-    # assert len(parameters) == 2  # fc.weight, fc.bias
+    # checkpoint = torch.load('checkpoint_0020.pth.tar', map_location=device)
+    # state_dict = checkpoint['state_dict']
+    # #  删除多余的fc层的权重信息，这样后面好重新训练
+    # if(channels==1):
+    #     for k in list(state_dict.keys()):
+    #
+    #        if k.startswith('backbone1c.fc'):
+    #             del state_dict[k]
+    # if (channels == 3):
+    #     for k in list(state_dict.keys()):
+    #
+    #         if k.startswith('backbone3c.fc'):
+    #             del state_dict[k]
+    # log = encoder.load_state_dict(state_dict, strict=False)
+    # # assert log.missing_keys == ['fc.weight', 'fc.bias']
+    # # freeze all layers but the last fc
+    # for name, param in encoder.named_parameters():
+    #     if name not in ['backbone1c.fc.weight', 'backbone1c.fc.bias']:
+    #         param.requires_grad = False
+    # parameters = list(filter(lambda p: p.requires_grad, encoder.parameters()))
+    # # assert len(parameters) == 2  # fc.weight, fc.bias
 
     Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
