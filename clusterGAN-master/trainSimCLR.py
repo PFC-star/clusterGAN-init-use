@@ -77,7 +77,7 @@ def main():
     channels = 1
 
     # Latent space info
-    latent_dim = 128
+    latent_dim = 30
     n_c = 10
     betan = 10
     betac = 25
@@ -130,27 +130,19 @@ def main():
         xe_loss.cuda()
         mse_loss.cuda()
     # ---------------------------初始化Encoder-------------------------------------------
-    # checkpoint = torch.load('checkpoint_0020.pth.tar', map_location=device)
-    # state_dict = checkpoint['state_dict']
-    # #  删除多余的fc层的权重信息，这样后面好重新训练
-    # if(channels==1):
-    #     for k in list(state_dict.keys()):
-    #
-    #        if k.startswith('backbone1c.fc'):
-    #             del state_dict[k]
-    # if (channels == 3):
-    #     for k in list(state_dict.keys()):
-    #
-    #         if k.startswith('backbone3c.fc'):
-    #             del state_dict[k]
-    # log = encoder.load_state_dict(state_dict, strict=False)
-    # # assert log.missing_keys == ['fc.weight', 'fc.bias']
-    # # freeze all layers but the last fc
-    # for name, param in encoder.named_parameters():
-    #     if name not in ['backbone1c.fc.weight', 'backbone1c.fc.bias']:
-    #         param.requires_grad = False
-    # parameters = list(filter(lambda p: p.requires_grad, encoder.parameters()))
-    # # assert len(parameters) == 2  # fc.weight, fc.bias
+    checkpoint = torch.load('checkpoint_0020EncoderInit.pth.tar', map_location=device)
+    state_dict = checkpoint['state_dict']
+    #  删除多余的fc层的权重信息，这样后面好重新训练
+
+
+    log = encoder.load_state_dict(state_dict, strict=False)
+    # assert log.missing_keys == ['fc.weight', 'fc.bias']
+    # freeze all layers but the last fc
+    for name, param in encoder.named_parameters():
+        if name not in ['model.7.weight', 'model.7.bias']:
+            param.requires_grad = False
+    parameters = list(filter(lambda p: p.requires_grad, encoder.parameters()))
+    # assert len(parameters) == 2  # fc.weight, fc.bias
 
     Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 

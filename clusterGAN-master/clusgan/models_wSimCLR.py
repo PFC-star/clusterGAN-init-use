@@ -226,7 +226,7 @@ class Discriminator_CNN(nn.Module):
         return validity
 
 
-class Encoder_CNN1(nn.Module):
+class Encoder_CNN(nn.Module):
     """
     CNN to model the encoder of a ClusterGAN
     Input is vector X from image space if dimension X_dim
@@ -244,7 +244,7 @@ class Encoder_CNN1(nn.Module):
         self.iels = int(np.prod(self.cshape))
         self.lshape = (self.iels,)
         self.verbose = verbose
-        self.fc = FC(28, latent_dim)
+
         self.model = nn.Sequential(
             # Convolutional layers
             nn.Conv2d(self.channels, 64, 4, stride=2, bias=True),
@@ -256,12 +256,12 @@ class Encoder_CNN1(nn.Module):
             Reshape(self.lshape),
 
             # Fully connected layers
-            torch.nn.Linear(self.iels, 1024),
+            torch.nn.Linear(self.iels,512),
             nn.LeakyReLU(0.2, inplace=True),
-            torch.nn.Linear(1024, latent_dim + n_c)
+            torch.nn.Linear(512, self.latent_dim  + self.n_c)
         )
 
-        initialize_weights(self)
+        # initialize_weights(self)
 
         if self.verbose:
             print("Setting up {}...\n".format(self.name))
@@ -278,9 +278,9 @@ class Encoder_CNN1(nn.Module):
         # Softmax on zc component
         zc = softmax(zc_logits)
         return zn, zc, zc_logits
-class Encoder_CNN(nn.Module):
+class Encoder_CNN1(nn.Module):
     def __init__(self, latent_dim, n_c, verbose=False):
-        super(Encoder_CNN, self).__init__()
+        super(Encoder_CNN1, self).__init__()
         self.latent_dim = latent_dim
         self.n_c = n_c
         self.name = 'encoder'
