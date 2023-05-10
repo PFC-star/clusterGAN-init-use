@@ -49,7 +49,7 @@ def main():
     parser.add_argument("-w", "--wass_metric", dest="wass_metric", default=True, action='store_true',
                         help="Flag for Wasserstein metric")
     parser.add_argument("-g", "-–gpu", dest="gpu", default=0, type=int, help="GPU id to use")
-    parser.add_argument("-k", "-–num_workers", dest="num_workers", default=2, type=int,
+    parser.add_argument("-k", "-–num_workers", dest="num_workers", default=0, type=int,
                         help="Number of dataset workers")
     parser.add_argument("-ru", "--resume_train", default=True, dest="resume_train", action='store_true',
                         help="resume_train")

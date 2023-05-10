@@ -77,7 +77,7 @@ def main():
     channels = 1
 
     # Latent space info
-    latent_dim = 30
+    latent_dim = 80
     n_c = 10
     betan = 10
     betac = 25
@@ -130,7 +130,7 @@ def main():
         xe_loss.cuda()
         mse_loss.cuda()
     # ---------------------------初始化Encoder-------------------------------------------
-    checkpoint = torch.load('checkpoint_0020EncoderInit.pth.tar', map_location=device)
+    checkpoint = torch.load('checkpoint_0020Init.pth.tar', map_location=device)
     state_dict = checkpoint['state_dict']
     #  删除多余的fc层的权重信息，这样后面好重新训练
 
@@ -139,8 +139,11 @@ def main():
     # assert log.missing_keys == ['fc.weight', 'fc.bias']
     # freeze all layers but the last fc
     for name, param in encoder.named_parameters():
-        if name not in ['model.7.weight', 'model.7.bias']:
+        if not name.startswith('fc'):
             param.requires_grad = False
+
+    for name, param in encoder.named_parameters():
+            print(name + ' ' + str(param.requires_grad))
     parameters = list(filter(lambda p: p.requires_grad, encoder.parameters()))
     # assert len(parameters) == 2  # fc.weight, fc.bias
 

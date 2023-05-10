@@ -91,7 +91,7 @@ class FC(nn.Module):
     def __init__(
             self,
             size=28,
-            style_dim=60,
+            style_dim=23,
             n_mlp=3,
             channel_multiplier=2,
             blur_kernel=[1, 3, 3, 1],
@@ -228,10 +228,10 @@ class Discriminator_CNN(nn.Module):
 
 class Encoder_CNN(nn.Module):
     """
-    CNN to model the encoder of a ClusterGAN
-    Input is vector X from image space if dimension X_dim
-    Output is vector z from representation space of dimension z_dim
-    """
+       CNN to model the encoder of a ClusterGAN
+       Input is vector X from image space if dimension X_dim
+       Output is vector z from representation space of dimension z_dim
+       """
 
     def __init__(self, latent_dim, n_c, verbose=False):
         super(Encoder_CNN, self).__init__()
@@ -244,7 +244,7 @@ class Encoder_CNN(nn.Module):
         self.iels = int(np.prod(self.cshape))
         self.lshape = (self.iels,)
         self.verbose = verbose
-
+        self.fc = FC(28, latent_dim)
         self.model = nn.Sequential(
             # Convolutional layers
             nn.Conv2d(self.channels, 64, 4, stride=2, bias=True),
@@ -256,12 +256,12 @@ class Encoder_CNN(nn.Module):
             Reshape(self.lshape),
 
             # Fully connected layers
-            torch.nn.Linear(self.iels,512),
+            torch.nn.Linear(self.iels, 1024),
             nn.LeakyReLU(0.2, inplace=True),
-            torch.nn.Linear(512, self.latent_dim  + self.n_c)
+            torch.nn.Linear(1024, latent_dim + n_c)
         )
 
-        # initialize_weights(self)
+        initialize_weights(self)
 
         if self.verbose:
             print("Setting up {}...\n".format(self.name))
@@ -273,11 +273,13 @@ class Encoder_CNN(nn.Module):
         z = z_img.view(z_img.shape[0], -1)
         # Separate continuous and one-hot components
         zn = z[:, 0:self.latent_dim]
-
+        zn = self.fc(zn)
         zc_logits = z[:, self.latent_dim:]
         # Softmax on zc component
         zc = softmax(zc_logits)
         return zn, zc, zc_logits
+
+
 class Encoder_CNN1(nn.Module):
     def __init__(self, latent_dim, n_c, verbose=False):
         super(Encoder_CNN1, self).__init__()
