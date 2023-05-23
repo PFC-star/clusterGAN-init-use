@@ -216,7 +216,7 @@ class Encoder_CNN(nn.Module):
         z = z_img.view(z_img.shape[0], -1)
         # Separate continuous and one-hot components
         zn = z[:, 0:self.latent_dim]
-        # zn = self.fc(zn)
+        zn = self.fc(zn)
         zc_logits = z[:, self.latent_dim:]
         # Softmax on zc component
         zc = softmax(zc_logits)
