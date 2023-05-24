@@ -43,7 +43,7 @@ except ImportError as e:
 def main():
     global args
     parser = argparse.ArgumentParser(description="TSNE generation script")
-    parser.add_argument("-r", "--run_dir", dest="run_dir", help="Training run directory")
+    parser.add_argument("-r", "--run_dir", default='runs\mnist',dest="run_dir", help="Training run directory")
     parser.add_argument("-p", "--perplexity", dest="perplexity", default=-1, type=int,  help="TSNE perplexity")
     parser.add_argument("-n", "--n_samples", dest="n_samples", default=100, type=int,  help="Number of samples")
     args = parser.parse_args()
@@ -53,19 +53,20 @@ def main():
     perplexity = args.perplexity
     
     # Directory structure for this run
-    run_dir = args.run_dir.rstrip("/")
-    print(run_dir.split(os.sep))
-    dataset_name = run_dir.split(os.sep)[-1]
-    print(dataset_name)
-    run_name = run_dir.split(os.sep)[-2]
+    # run_dir = args.run_dir.rstrip("/")
+    # print(run_dir.split(os.sep))
+    # dataset_name = run_dir.split(os.sep)[-1]
+    # print(dataset_name)
+    # run_name = run_dir.split(os.sep)[-2]
     # run_name = "300epoch_z30_wass_bs64_" + run_name
     # run_name = "300epoch_z30_wass_bs128_" + run_name
     # run_name = "300epoch_z30_wass_bs256_" + run_name
-    run_name = "300epoch_z30_van_bs64_" + run_name
+    # run_name = "300epoch_z128_wass_bs32_" + run_name
     # run_name = "300epoch_z30_van_bs256_" + run_name
     # run_name = "300epoch_z30_van_bs64_test_run_Vanilla"
     # run_name = "300epoch_z30_van_bs32_" + run_name
-    # run_name = "300epoch_z30_wass_bs128_test_run"
+    dataset_name = 'mnist'
+    run_name = "300epoch_z30_van_bs128_test_run"
     print(run_name)
     
     run_dir = os.path.join(RUNS_DIR, dataset_name, run_name)   
@@ -81,12 +82,13 @@ def main():
     n_c = train_df['n_classes'][0]
 
     cuda = True if torch.cuda.is_available() else False
-    
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     # Load encoder model
     encoder = Encoder_CNN(latent_dim, n_c)
     enc_figname = os.path.join(models_dir, encoder.name + '.pth.tar')
-    encoder.load_state_dict(torch.load(enc_figname))
-    encoder.cuda()
+    encoder.load_state_dict(torch.load(enc_figname,map_location=device))
+    if(cuda):
+        encoder.cuda()
     encoder.eval()
 
     # Configure data loader

@@ -41,7 +41,7 @@ except ImportError as e:
 def main():
     global args
     parser = argparse.ArgumentParser(description="Convolutional NN Training Script")
-    parser.add_argument("-r", "--run_name", dest="run_name", default='clusgan_test', help="Name of training run")
+    parser.add_argument("-r", "--run_name", dest="run_name", default='clusganW', help="Name of training run")
     parser.add_argument("-n", "--n_epochs", dest="n_epochs", default=300, type=int, help="Number of epochs")
     parser.add_argument("-b", "--batch_size", dest="batch_size", default=128, type=int, help="Batch size")
     parser.add_argument("-s", "--dataset_name", dest="dataset_name", default='mnist', choices=dataset_list,
@@ -49,7 +49,7 @@ def main():
     parser.add_argument("-w", "--wass_metric", dest="wass_metric", default=True, action='store_true',
                         help="Flag for Wasserstein metric")
     parser.add_argument("-g", "-–gpu", dest="gpu", default=0, type=int, help="GPU id to use")
-    parser.add_argument("-k", "-–num_workers", dest="num_workers", default=0, type=int,
+    parser.add_argument("-k", "-–num_workers", dest="num_workers", default=2, type=int,
                         help="Number of dataset workers")
     parser.add_argument("-ru", "--resume_train", default=True, dest="resume_train", action='store_true',
                         help="resume_train")
@@ -57,7 +57,7 @@ def main():
 
     args = parser.parse_args()
     epoch_init = 0
-    args.resume_train = True
+    args.resume_train = False
     run_name = args.run_name
     dataset_name = args.dataset_name
     device_id = args.gpu

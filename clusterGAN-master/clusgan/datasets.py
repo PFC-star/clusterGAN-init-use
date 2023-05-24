@@ -45,7 +45,7 @@ def get_dataset(dataset_name='mnist'):
 
 
 
-def get_dataloader(dataset_name='mnist', data_dir='', batch_size=64, train_set=True, num_workers=1):
+def get_dataloader(dataset_name='mnist', data_dir='', batch_size=64, train_set=True, num_workers=0):
 
     dset = get_dataset(dataset_name)
 
